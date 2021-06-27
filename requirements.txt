@@ -1,0 +1,2 @@
+celery==5.0.5
+dydx-v3-python==1.0.10
