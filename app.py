@@ -1,14 +1,3 @@
-#TODO
-'''
-- [x] Create a task that runs every minute (t = 60)
-- [x] Import dydx package and init client (existing stark key and api creds)
-- [x] Collect latest candle
-- [x] Check account balances
-- [x] Check open positions and open orders
-- [x] If no open positions -> open buy limit order: price = latest close * .999 & amount = all USDC
-- [x] Else if BUY orders and latest close * .999 != order price -> modify order: price = latest close * .999
-- [x] Else if open position and no BUY orders -> open sell limit order: price = last BUY order price * 1.002 & amount = all base asset
-'''
 import time
 import json
 from dydx3 import Client
@@ -149,53 +138,3 @@ class MarketMaker:
 
             record['close'] = candle['close']
         self.save_records()
-
-
-        
-mmaker = MarketMaker()
-mmaker.trade()
-
-'''
-'openPositions': {
-    'ETH-USD': {
-        'market': 'ETH-USD',
-        'status': 'OPEN',
-        'side': 'LONG',
-        'size': '0.01',
-        'maxSize': '0.01',
-        'entryPrice': '1824.400000',
-        'exitPrice': '0.000000',
-        'unrealizedPnl': '-0.011200',
-        'realizedPnl': '0.000000',
-        'createdAt': '2021-06-27T17:33:17.159Z',
-        'closedAt': None,
-        'sumOpen': '0.01',
-        'sumClose': '0',
-        'netFunding': '0'
-    }
-}
-'''
-
-'''
-ORDER:
-{
-    'id': '0d2ca42c11d0b4a4ef496eaef3d01d3360e6b1b26d3f0a1bf6a89123a8c4d95',
-    'clientId': '44105382277918936',
-    'accountId': '0cb83e33-39c3-5c76-895e-ff0d76db91c5',
-    'market': 'BTC-USD',
-    'side': 'BUY',
-    'price': '30000',
-    'triggerPrice': None,
-    'trailingPercent': None,
-    'size': '0.001',
-    'remainingSize': '0.001',
-    'type': 'LIMIT',
-    'createdAt': '2021-06-27T18:20:03.050Z',
-    'unfillableAt': None,
-    'expiresAt': '2021-06-27T21:20:02.611Z',
-    'status': 'OPEN',
-    'timeInForce': 'GTT',
-    'postOnly': True,
-    'cancelReason': None
-}
-'''
