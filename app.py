@@ -1,10 +1,3 @@
-# TODO
-'''
-- [x] Get buy and sell orders separately
-- [x] Sell order -> max of + .2% and first orderbook ask price (prevents cancellation)
-- [x] If sell order already exists, do not create further orders!!!
-'''
-
 import time
 import json
 from dydx3 import Client
