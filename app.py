@@ -1,3 +1,10 @@
+# TODO
+'''
+- [x] Get buy and sell orders separately
+- [x] Sell order -> max of + .2% and first orderbook ask price (prevents cancellation)
+- [x] If sell order already exists, do not create further orders!!!
+'''
+
 import time
 import json
 from dydx3 import Client
@@ -29,7 +36,8 @@ class MarketMaker:
         self.orderbook = {}
         self.account = {}
         self.positions = {}
-        self.orders = []
+        self.buy_orders = []
+        self.sell_orders = []
         self.fills = []
         self.open_records()
         self.get_latest_candles()
@@ -62,14 +70,23 @@ class MarketMaker:
         self.account = account['account']
         self.positions = self.account['openPositions']
 
-    def get_orders(self, market: str):
+    def get_buy_orders(self, market: str):
         orders = self.client.private.get_orders(
             market=market,
             status=ORDER_STATUS_OPEN,
             side=ORDER_SIDE_BUY,
             limit=1,
         )
-        self.orders = orders['orders']
+        self.buy_orders = orders['orders']
+
+    def get_sell_orders(self, market: str):
+        orders = self.client.private.get_orders(
+            market=market,
+            status=ORDER_STATUS_OPEN,
+            side=ORDER_SIDE_SELL,
+            limit=1,
+        )
+        self.sell_orders = orders['orders']
 
     def get_fills(self, market: str):
         fills = self.client.private.get_fills(market=market)
@@ -80,7 +97,8 @@ class MarketMaker:
             record = self.records[market]
             candle = self.candles[market]['candles'][0]
             self.get_orderbook(market)
-            self.get_orders(market)
+            self.get_buy_orders(market)
+            self.get_sell_orders(market)
             self.get_fills(market)
 
             if not self.positions.get(market):
@@ -103,10 +121,10 @@ class MarketMaker:
                     'limit_fee': '0.0005',
                     'expiration_epoch_seconds': time.time() + 10800,
                 }
-                if not self.orders:
+                if not self.buy_orders:
                     r = self.client.private.create_order(**order_params)
                     record['orderId'] = r['order']['id']
-                elif self.orders and record['close'] != candle['close']:
+                elif record['close'] != candle['close']:
                     r = self.client.private.create_order(
                         **dict(
                             order_params,
@@ -115,7 +133,12 @@ class MarketMaker:
                         ),
                     )
                     record['orderId'] = r['order']['id']
-            else:
+            elif not self.sell_orders:
+                price = max(
+                    float(self.positions[market]['entryPrice']) * 1.001 ** 2,
+                    float(self.orderbook['asks'][0]['price'])
+                )
+                price = round(price, 1)
                 order_params = {
                     'position_id': self.account['positionId'],
                     'market': market,
@@ -123,14 +146,7 @@ class MarketMaker:
                     'order_type': ORDER_TYPE_LIMIT,
                     'post_only': True,
                     'size': self.positions[market]['size'],
-                    'price': str(
-                        round(
-                            float(
-                                self.positions[market]['entryPrice']
-                            ) * 1.001 ** 2,
-                            1
-                        )
-                    ),
+                    'price': str(price),
                     'limit_fee': '0.0005',
                     'expiration_epoch_seconds': time.time() + 2592000,
                 }
