@@ -31,9 +31,6 @@ class MarketMaker:
         self.positions = {}
         self.buy_orders = []
         self.sell_orders = []
-        self.fills = []
-        self.open_records()
-        self.get_latest_candles()
         self.get_account()
 
     def open_records(self):
@@ -81,28 +78,22 @@ class MarketMaker:
         )
         self.sell_orders = orders['orders']
 
-    def get_fills(self, market: str):
-        fills = self.client.private.get_fills(market=market)
-        self.fills = fills['fills']
+    def calculate_mid_market_price(self):
+        bid_price = float(self.orderbook['bids'][0]['price'])
+        ask_price = float(self.orderbook['asks'][0]['price'])
+        return bid_price + (ask_price - bid_price) * .5
 
     def trade(self):
         for market in self.candles:
-            record = self.records[market]
-            candle = self.candles[market]['candles'][0]
             self.get_orderbook(market)
             self.get_buy_orders(market)
             self.get_sell_orders(market)
-            self.get_fills(market)
 
-            if not self.positions.get(market):
-                orderbook_price = float(self.orderbook['asks'][0]['price'])
-                size = min(float(self.account['quoteBalance']), 10000)
-                size = round(size / orderbook_price, 3)
-                price = min(
-                    float(candle['close']),
-                    float(self.orderbook['bids'][0]['price'])
-                )
-                price = round(price * .995, 1)
+            if not self.buy_orders and not self.sell_orders:
+                mm_price = self.calculate_mid_market_price()
+                size = min(float(self.account['quoteBalance']) / 10, 10000)
+                size = round(size / mm_price, 3)
+                price = round(mm_price * (1 - .00055), 1)
                 order_params = {
                     'position_id': self.account['positionId'],
                     'market': market,
@@ -112,52 +103,20 @@ class MarketMaker:
                     'size': str(size),
                     'price': str(price),
                     'limit_fee': '0.0005',
-                    'expiration_epoch_seconds': time.time() + 86400,
+                    'expiration_epoch_seconds': time.time() + 2592000,
                 }
-                if not self.buy_orders:
-                    r = self.client.private.create_order(**order_params)
-                    record['orderId'] = r['order']['id']
-                elif record['open'] != candle['open']:
-                    r = self.client.private.create_order(
-                        **dict(
-                            order_params,
-                            price=str(price),
-                            cancel_id=record['orderId'],
-                        ),
-                    )
-                    record['orderId'] = r['order']['id']
-            else:
-                price = max(
-                    float(self.positions[market]['entryPrice']) * 1.001 ** 2,
-                    float(self.orderbook['asks'][0]['price'])
-                )
-                price = round(price, 1)
+                self.client.private.create_order(**order_params)
+
+                price = round(mm_price * (1 + .00055), 1)
                 order_params = {
                     'position_id': self.account['positionId'],
                     'market': market,
                     'side': ORDER_SIDE_SELL,
                     'order_type': ORDER_TYPE_LIMIT,
                     'post_only': True,
-                    'size': self.positions[market]['size'],
+                    'size': str(size),
                     'price': str(price),
                     'limit_fee': '0.0005',
                     'expiration_epoch_seconds': time.time() + 2592000,
                 }
-                if not self.sell_orders:
-                    r = self.client.private.create_order(**order_params)
-                    record['orderId'] = r['order']['id']
-                elif (
-                    float(self.orderbook['bids'][0]['price']) <
-                    float(self.positions[market]['entryPrice']) * .99
-                    ):
-                    r = self.client.private.create_order(
-                        **dict(
-                            order_params,
-                            price=self.orderbook['bids'][0]['price'],
-                            cancel_id=record['orderId'],
-                        ),
-                    )
-                    record['orderId'] = r['order']['id']
-                
-            record['open'] = candle['open']
-        self.save_records()
+                self.client.private.create_order(**order_params)
