@@ -32,6 +32,7 @@ class Bot:
         self.num_samples = num_samples
         self.num_std = num_std
         self.candles = {}
+        self.latest_low = None
         self.market_info = {}
         self.orderbook = {}
         self.account = {}
@@ -53,13 +54,14 @@ class Bot:
         endpoint = f'/products/{self.market}/candles'
         r = requests.get(self.coinbase_api + endpoint)
         data = r.json()[:self.num_samples][::-1]
+        self.latest_low = float(data[-1][1])
         return [float(x[4]) for x in data]
 
     def check_price_anomaly(self):
         price_history = self.get_price_history()
         mean_price = statistics.mean(price_history)
         mean_std = statistics.stdev(price_history)
-        return price_history[-1] < mean_price - self.num_std * mean_std
+        return self.latest_low < mean_price - self.num_std * mean_std
 
     def get_market_info(self):
         r = self.client.public.get_markets(self.market)
@@ -170,10 +172,11 @@ class Bot:
                     buy_order = all_buy_orders['orders'][0]\
                         if all_buy_orders['orders']\
                         else None
-                    price = float(self.orderbook['bids'][0]['price'])
+                    bid_price = float(self.orderbook['bids'][0]['price'])
+                    price = min(self.latest_low, bid_price)
                     equity = float(self.account['equity'])
                     size = min(equity / len(BASE_ASSETS), 10000)
-                    size = size / price
+                    size = size / float(self.market_info['indexPrice'])
                     size = round(size - size % float(step_size), step_exp)
                     size = str(
                         max(size, float(self.market_info['minOrderSize']))
