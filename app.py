@@ -31,7 +31,6 @@ class Bot:
         self.market = None
         self.num_samples = num_samples
         self.num_std = num_std
-        self.records = {}
         self.candles = {}
         self.market_info = {}
         self.orderbook = {}
@@ -40,16 +39,6 @@ class Bot:
         self.buy_orders = []
         self.sell_orders = []
         self.get_account()
-
-    def open_records(self):
-        with open('records.json', 'r') as f:
-            self.records = json.load(f)
-            f.close()
-
-    def save_records(self):
-        with open('records.json', 'w') as f:
-            self.records = json.dump(self.records, f)
-            f.close()
 
     def get_latest_candle(self):
         for asset in BASE_ASSETS:
