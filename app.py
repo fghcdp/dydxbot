@@ -1,5 +1,5 @@
 import time
-import json
+import decimal
 import requests
 import statistics
 from dydx3 import Client
@@ -154,7 +154,6 @@ class Bot:
             self.get_sell_orders()
             self.get_positions()
 
-            import decimal
             step_size = self.market_info['stepSize']
             step_exp = abs(decimal.Decimal(step_size).as_tuple().exponent)
             tick_size = self.market_info['tickSize']
