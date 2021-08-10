@@ -11,12 +11,6 @@ def setup_periodic_tasks(sender, **kwargs):
 
 
 @app.task
-def run_marketmaker_strategy():
-    bot = Bot()
-    bot.run_marketmaker_strategy()
-
-
-@app.task
 def run_meanreversion_strategy():
     bot = Bot()
     bot.run_meanreversion_strategy()
