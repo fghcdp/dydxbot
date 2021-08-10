@@ -203,10 +203,10 @@ class Bot:
                     # Take profit price
                     price = max(
                         entry_price + target_sigma,
-                        entry_price * 1.0075,
+                        entry_price * 1.005,
                     )
                     # Stop loss price
-                    if ask_price < entry_price - (price - entry_price) * .67:
+                    if ask_price < entry_price - (price - entry_price) * .5:
                         price = ask_price
                     price = str(round(price, tick_exp))
                     size = self.positions[0]['sumOpen']
