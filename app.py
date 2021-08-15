@@ -106,8 +106,11 @@ class Bot:
         positions = self.client.private.get_positions(
             market=self.market,
             status=POSITION_STATUS_OPEN,
-        )
-        self.positions = positions['positions']
+        )['positions']
+        self.positions = {
+            'long': [x for x in positions if x['side'] == 'LONG'],
+            'short': [x for x in positions if x['side'] == 'SHORT'],
+        }
 
     """
     STRATEGIES
@@ -149,7 +152,7 @@ class Bot:
                 if sell_orders['orders']\
                 else None
 
-            if not self.positions:
+            if not self.positions['long']:
                 price = float(self.orderbook['bids'][0]['price'])
                 if self.get_entry_signal(price):
                     if not buy_order:
