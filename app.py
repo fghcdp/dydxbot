@@ -1,5 +1,4 @@
 import time
-import json
 import decimal
 import requests
 import statistics
@@ -21,7 +20,13 @@ from config import (
 
 class Bot:
 
-    def __init__(self, num_samples=20, num_std=2, records_fname='records'):
+    def __init__(
+        self,
+        num_samples=20,
+        num_std=2,
+        positive_multiplier=1.003,
+        negative_multiplier=.999,
+        ):
         self.client = Client(
             host=HOST,
             default_ethereum_address=ETHEREUM_ADDRESS,
@@ -32,10 +37,9 @@ class Bot:
         self.market = None
         self.num_samples = num_samples
         self.num_std = num_std
-        self.records_fname = records_fname
-        self.candles = {}
+        self.positive_multiplier = positive_multiplier
+        self.negative_multiplier = negative_multiplier
         self.price_history = []
-        self.latest_low = None
         self.mean_price = None
         self.mean_std = None
         self.market_info = {}
@@ -45,30 +49,6 @@ class Bot:
         self.buy_orders = []
         self.sell_orders = []
         self.get_account()
-
-    def load_all_records(self):
-        with open(self.records_fname + '.json', 'r') as f:
-            records = json.load(f)
-        return records
-
-    def load_market_record(self):
-        records = self.load_all_records()
-        return records[self.market]
-
-    def save_market_record(self, data):
-        records = self.load_all_records()
-        records[self.market] = data
-        with open(self.records_fname + '.json', 'w') as f:
-            json.dump(records, f)
-
-    def get_latest_candle(self):
-        for asset in BASE_ASSETS:
-            market_pair = f'{asset}-{QUOTATION_ASSET}'
-            self.candles[market_pair] = self.client.public.get_candles(
-                market_pair,
-                resolution='1HOUR',
-                limit=1
-            )
 
     def get_price_history(self):
         endpoint = f'/products/{self.market}/candles'
@@ -84,10 +64,10 @@ class Bot:
         return price < self.mean_price - self.num_std * self.mean_std
 
     def get_postive_exit_signal(self, entry_price, price):
-        return entry_price * 1.002 < self.mean_price - self.mean_std < price
+        return entry_price * self.positive_multiplier < price
 
     def get_negative_exit_signal(self, entry_price, price):
-        return self.mean_price - self.mean_std < price < entry_price * .998
+        return price < entry_price * self.negative_multiplier
 
     def get_stop_signal(self, entry_price, price):
         return price < entry_price * .98
@@ -128,11 +108,6 @@ class Bot:
             status=POSITION_STATUS_OPEN,
         )
         self.positions = positions['positions']
-
-    def calculate_mid_market_price(self):
-        bid_price = float(self.orderbook['bids'][0]['price'])
-        ask_price = float(self.orderbook['asks'][0]['price'])
-        return bid_price + (ask_price - bid_price) * .5
 
     """
     STRATEGIES
