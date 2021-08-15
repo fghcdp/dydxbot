@@ -74,9 +74,10 @@ class Bot:
         # data = r.json()[:self.num_samples][::-1]
         # self.price_history = [float(x[4]) for x in data]
 
+        price = self.get_midmarket_price()
         history = self.load_market_history()
-        history.append(float(self.market_info['indexPrice']))
-        self.price_history = history[-20:]
+        history.append(price)
+        self.price_history = history[-120:]
         self.save_market_history(self.price_history)
 
     def calculate_price_stats(self):
@@ -101,6 +102,13 @@ class Bot:
 
     def get_orderbook(self):
         self.orderbook = self.client.public.get_orderbook(market=self.market)
+
+    def get_midmarket_price(self):
+        top_bid = float(self.orderbook['bids'][0]['price'])
+        top_ask = float(self.orderbook['asks'][0]['price'])
+        price = top_bid + (top_ask - top_bid) / 2
+        tick_exp = abs(decimal.Decimal(top_bid).as_tuple().exponent)
+        return round(price, tick_exp)
 
     def get_account(self):
         account = self.client.private.get_account()
@@ -143,9 +151,9 @@ class Bot:
         for market in [b + '-' + QUOTATION_ASSET for b in BASE_ASSETS]:
             self.market = market
             self.get_market_info()
+            self.get_orderbook()
             self.get_price_history()
             self.calculate_price_stats()
-            self.get_orderbook()
             self.get_buy_orders()
             self.get_sell_orders()
             self.get_positions()
@@ -251,3 +259,9 @@ class Bot:
                         'expiration_epoch_seconds': time.time() + 3600,
                     }
                     self.client.private.create_order(**order_params)
+
+bot = Bot()
+bot.market= 'ETH-USD'
+bot.get_market_info()
+bot.get_orderbook()
+bot.get_price_history()
