@@ -1,4 +1,5 @@
 import time
+import json
 import decimal
 import requests
 import statistics
@@ -22,6 +23,7 @@ class Bot:
 
     def __init__(
         self,
+        histories_fname='histories',
         num_samples=20,
         num_std=2,
         positive_multiplier=1.003,
@@ -35,6 +37,7 @@ class Bot:
         self.client.stark_private_key = STARK_PRIVATE_KEY
         self.coinbase_api = 'https://api.pro.coinbase.com'
         self.market = None
+        self.histories_fname = histories_fname
         self.num_samples = num_samples
         self.num_std = num_std
         self.positive_multiplier = positive_multiplier
@@ -50,11 +53,31 @@ class Bot:
         self.sell_orders = []
         self.get_account()
 
+    def load_all_histories(self):
+        with open(self.histories_fname + '.json', 'r') as f:
+            histories = json.load(f)
+        return histories
+
+    def load_market_history(self):
+        histories = self.load_all_histories()
+        return histories[self.market] if histories.get(self.market) else []
+
+    def save_market_history(self, data):
+        histories = self.load_all_histories()
+        histories[self.market] = data
+        with open(self.histories_fname + '.json', 'w') as f:
+            json.dump(histories, f)
+
     def get_price_history(self):
-        endpoint = f'/products/{self.market}/candles'
-        r = requests.get(self.coinbase_api + endpoint)
-        data = r.json()[:self.num_samples][::-1]
-        self.price_history = [float(x[4]) for x in data]
+        # endpoint = f'/products/{self.market}/candles'
+        # r = requests.get(self.coinbase_api + endpoint)
+        # data = r.json()[:self.num_samples][::-1]
+        # self.price_history = [float(x[4]) for x in data]
+
+        history = self.load_market_history()
+        history.append(float(self.market_info['indexPrice']))
+        self.price_history = history[-20:]
+        self.save_market_history(self.price_history)
 
     def calculate_price_stats(self):
         self.mean_price = statistics.mean(self.price_history)
