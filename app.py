@@ -83,8 +83,11 @@ class Bot:
     def get_entry_signal(self, price):
         return price < self.mean_price - self.num_std * self.mean_std
 
-    def get_take_profit_signal(self, entry_price, price):
-        return entry_price * 1.001 < self.mean_price - self.mean_std < price
+    def get_postive_exit_signal(self, entry_price, price):
+        return entry_price * 1.002 < self.mean_price - self.mean_std < price
+
+    def get_negative_exit_signal(self, entry_price, price):
+        return self.mean_price - self.mean_std < price < entry_price * .998
 
     def get_stop_signal(self, entry_price, price):
         return price < entry_price * .98
@@ -149,19 +152,31 @@ class Bot:
             step_size = self.market_info['stepSize']
             step_exp = abs(decimal.Decimal(step_size).as_tuple().exponent)
 
+            buy_orders = self.client.private.get_orders(
+                market=market,
+                status=ORDER_STATUS_OPEN,
+                side=ORDER_SIDE_BUY,
+                order_type=ORDER_TYPE_LIMIT,
+                limit=1,
+            )
+            buy_order = buy_orders['orders'][0]\
+                if buy_orders['orders']\
+                else None
+
+            sell_orders = self.client.private.get_orders(
+                market=market,
+                status=ORDER_STATUS_OPEN,
+                side=ORDER_SIDE_SELL,
+                order_type=ORDER_TYPE_LIMIT,
+                limit=1,
+            )
+            sell_order = sell_orders['orders'][0]\
+                if sell_orders['orders']\
+                else None
+
             if not self.positions:
                 price = float(self.orderbook['bids'][0]['price'])
                 if self.get_entry_signal(price):
-                    buy_orders = self.client.private.get_orders(
-                        market=market,
-                        status=ORDER_STATUS_OPEN,
-                        side=ORDER_SIDE_BUY,
-                        order_type=ORDER_TYPE_LIMIT,
-                        limit=1,
-                    )
-                    buy_order = buy_orders['orders'][0]\
-                        if buy_orders['orders']\
-                        else None
                     if not buy_order:
                         equity = float(self.account['equity'])
                         size = min(equity, 10000)
@@ -187,32 +202,41 @@ class Bot:
             else:
                 entry_price = float(self.positions[0]['entryPrice'])
                 price = float(self.orderbook['asks'][0]['price'])
-                sell_orders = self.client.private.get_orders(
-                    market=market,
-                    status=ORDER_STATUS_OPEN,
-                    side=ORDER_SIDE_SELL,
-                    order_type=ORDER_TYPE_LIMIT,
-                    limit=1,
-                )
-                sell_order = sell_orders['orders'][0]\
-                    if sell_orders['orders']\
-                    else None
                 size = self.positions[0]['sumOpen']
-                if self.get_take_profit_signal(entry_price, price):
-                    if not sell_order:
-                        order_params = {
-                            'position_id': self.account['positionId'],
-                            'market': market,
-                            'side': ORDER_SIDE_SELL,
-                            'order_type': ORDER_TYPE_LIMIT,
-                            'post_only': True,
-                            'size': size,
-                            'price': str(price),
-                            'limit_fee': '0.0005',
-                            'expiration_epoch_seconds': time.time() + 3600,
+                order_params = {
+                    'position_id': self.account['positionId'],
+                    'market': market,
+                    'side': ORDER_SIDE_SELL,
+                    'order_type': ORDER_TYPE_LIMIT,
+                    'post_only': True,
+                    'size': size,
+                    'price': str(price),
+                    'limit_fee': '0.0005',
+                    'expiration_epoch_seconds': time.time() + 3600,
+                }
+                if float(size) < float(self.market_info['minOrderSize']):
+                    order_params.update(
+                        {
+                            'side': ORDER_SIDE_BUY,
+                            'size': self.market_info['minOrderSize'],
+                            'price': self.orderbook['bids'][0]['price'],
                         }
+                    )
+                    if buy_order:
+                        order_params.update({'cancel_id': buy_order['id']})
+                    self.client.private.create_order(**order_params)
+                elif self.get_postive_exit_signal(entry_price, price):
+                    if not sell_order:
                         self.client.private.create_order(**order_params)
+                elif self.get_negative_exit_signal(entry_price, price):
+                    if sell_order:
+                        order_params.update({'cancel_id': sell_order['id']})
+                    self.client.private.create_order(**order_params)
                 if self.get_stop_signal(entry_price, price):
+                    if sell_order:
+                        self.client.private.cancel_order(
+                            order_id=sell_order['id']
+                        )
                     order_params = {
                         'position_id': self.account['positionId'],
                         'market': market,
@@ -226,7 +250,3 @@ class Bot:
                         'expiration_epoch_seconds': time.time() + 3600,
                     }
                     self.client.private.create_order(**order_params)
-                    if sell_order:
-                        self.client.private.cancel_order(
-                            order_id=sell_order['id']
-                        )
