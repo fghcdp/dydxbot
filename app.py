@@ -78,6 +78,8 @@ class Bot:
         history.append(float(self.market_info['indexPrice']))
         self.price_history = history[-120:]
         self.save_market_history(self.price_history)
+        if len(self.price_history) == 1:
+            self.price_history += self.price_history
 
     def calculate_price_stats(self):
         self.mean_price = statistics.mean(self.price_history)
