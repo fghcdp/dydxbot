@@ -26,7 +26,7 @@ class Bot:
         histories_fname='histories',
         num_samples=20,
         num_std=2,
-        positive_multiplier=1.003,
+        positive_multiplier=1.002,
         negative_multiplier=.999,
         ):
         self.client = Client(
@@ -76,7 +76,7 @@ class Bot:
 
         history = self.load_market_history()
         history.append(float(self.market_info['indexPrice']))
-        self.price_history = history[-20:]
+        self.price_history = history[-120:]
         self.save_market_history(self.price_history)
 
     def calculate_price_stats(self):
@@ -86,7 +86,7 @@ class Bot:
     def get_entry_signal(self, price):
         return price < self.mean_price - self.num_std * self.mean_std
 
-    def get_postive_exit_signal(self, entry_price, price):
+    def get_positive_exit_signal(self, entry_price, price):
         return entry_price * self.positive_multiplier < price
 
     def get_negative_exit_signal(self, entry_price, price):
@@ -226,13 +226,13 @@ class Bot:
                     if buy_order:
                         order_params.update({'cancel_id': buy_order['id']})
                     self.client.private.create_order(**order_params)
-                elif self.get_postive_exit_signal(entry_price, price):
+                elif self.get_positive_exit_signal(entry_price, price):
                     if not sell_order:
                         self.client.private.create_order(**order_params)
-                elif self.get_negative_exit_signal(entry_price, price):
-                    if sell_order:
-                        order_params.update({'cancel_id': sell_order['id']})
-                    self.client.private.create_order(**order_params)
+                # elif self.get_negative_exit_signal(entry_price, price):
+                #     if sell_order:
+                #         order_params.update({'cancel_id': sell_order['id']})
+                #     self.client.private.create_order(**order_params)
                 if self.get_stop_signal(entry_price, price):
                     if sell_order:
                         self.client.private.cancel_order(
