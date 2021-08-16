@@ -203,9 +203,9 @@ class Bot:
                         self.client.private.create_order(**order_params)
 
             else:
-                entry_price = float(self.positions[0]['entryPrice'])
+                entry_price = float(self.positions['long'][0]['entryPrice'])
                 price = float(self.orderbook['asks'][0]['price'])
-                size = self.positions[0]['sumOpen']
+                size = self.positions['long'][0]['sumOpen']
                 order_params = {
                     'position_id': self.account['positionId'],
                     'market': market,
