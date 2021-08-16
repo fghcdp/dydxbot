@@ -28,6 +28,8 @@ class Bot:
         num_std=2,
         positive_multiplier=1.002,
         negative_multiplier=.999,
+        fee=.0005,
+        margin=.0001,
         ):
         self.client = Client(
             host=HOST,
@@ -42,6 +44,8 @@ class Bot:
         self.num_std = num_std
         self.positive_multiplier = positive_multiplier
         self.negative_multiplier = negative_multiplier
+        self.fee = fee
+        self.margin = margin
         self.price_history = []
         self.mean_price = None
         self.mean_std = None
@@ -145,8 +149,8 @@ class Bot:
         for market in [b + '-' + QUOTATION_ASSET for b in BASE_ASSETS]:
             self.market = market
             self.get_market_info()
-            self.get_price_history()
-            self.calculate_price_stats()
+            # self.get_price_history()
+            # self.calculate_price_stats()
             self.get_orderbook()
             self.get_buy_orders()
             self.get_sell_orders()
@@ -179,32 +183,36 @@ class Bot:
 
             if not self.positions['long']:
                 price = float(self.orderbook['bids'][0]['price'])
-                if self.get_entry_signal(price):
-                    if not buy_order:
-                        equity = float(self.account['equity'])
-                        size = min(equity, 10000)
-                        size = size / float(self.market_info['indexPrice'])
-                        size = round(size - size % float(step_size), step_exp)
-                        size = str(
-                            max(size, float(self.market_info['minOrderSize']))
-                        )
-                        price = str(price)
-                        order_params = {
-                            'position_id': self.account['positionId'],
-                            'market': market,
-                            'side': ORDER_SIDE_BUY,
-                            'order_type': ORDER_TYPE_LIMIT,
-                            'post_only': True,
-                            'size': size,
-                            'price': price,
-                            'limit_fee': '0.0005',
-                            'expiration_epoch_seconds': time.time() + 3600,
-                        }
-                        self.client.private.create_order(**order_params)
+                # if self.get_entry_signal(price):
+                    # if not buy_order:
+                equity = float(self.account['equity'])
+                size = min(equity, 10000)
+                size = size / float(self.market_info['indexPrice'])
+                size = round(size - size % float(step_size), step_exp)
+                size = str(
+                    max(size, float(self.market_info['minOrderSize']))
+                )
+                order_params = {
+                    'position_id': self.account['positionId'],
+                    'market': market,
+                    'side': ORDER_SIDE_BUY,
+                    'order_type': ORDER_TYPE_LIMIT,
+                    'post_only': True,
+                    'size': size,
+                    'price': str(price),
+                    'limit_fee': '0.0005',
+                    'expiration_epoch_seconds': time.time() + 3600,
+                }
+                if buy_order:
+                    order_params.update({'cancel_id': buy_order['id']})
+                self.client.private.create_order(**order_params)
 
             else:
                 entry_price = float(self.positions['long'][0]['entryPrice'])
-                price = float(self.orderbook['asks'][0]['price'])
+                for n in range(10):
+                    price = float(self.orderbook['asks'][n]['price'])
+                    if price >= entry_price * (1 + self.fee * 2 + self.margin):
+                        break
                 size = self.positions['long'][0]['sumOpen']
                 order_params = {
                     'position_id': self.account['positionId'],
@@ -228,13 +236,17 @@ class Bot:
                     if buy_order:
                         order_params.update({'cancel_id': buy_order['id']})
                     self.client.private.create_order(**order_params)
-                elif self.get_positive_exit_signal(entry_price, price):
-                    if not sell_order:
-                        self.client.private.create_order(**order_params)
+                elif not sell_order:
+                    self.client.private.create_order(**order_params)
+
+                # elif self.get_positive_exit_signal(entry_price, price):
+                #     if not sell_order:
+                #         self.client.private.create_order(**order_params)
                 # elif self.get_negative_exit_signal(entry_price, price):
                 #     if sell_order:
                 #         order_params.update({'cancel_id': sell_order['id']})
                 #     self.client.private.create_order(**order_params)
+                price = float(self.orderbook['asks'][0]['price'])
                 if self.get_stop_signal(entry_price, price):
                     if sell_order:
                         self.client.private.cancel_order(
