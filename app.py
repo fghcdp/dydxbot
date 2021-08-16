@@ -29,7 +29,7 @@ class Bot:
         positive_multiplier=1.002,
         negative_multiplier=.999,
         fee=.0005,
-        margin=.0001,
+        margin=.001,
         ):
         self.client = Client(
             host=HOST,
