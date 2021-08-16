@@ -26,7 +26,7 @@ class Bot:
         histories_fname='histories',
         num_samples=20,
         num_std=2,
-        positive_multiplier=1.002,
+        positive_multiplier=1.003,
         negative_multiplier=.999,
         ):
         self.client = Client(
@@ -231,10 +231,10 @@ class Bot:
                 elif self.get_positive_exit_signal(entry_price, price):
                     if not sell_order:
                         self.client.private.create_order(**order_params)
-                # elif self.get_negative_exit_signal(entry_price, price):
-                #     if sell_order:
-                #         order_params.update({'cancel_id': sell_order['id']})
-                #     self.client.private.create_order(**order_params)
+                elif self.get_negative_exit_signal(entry_price, price):
+                    if sell_order:
+                        order_params.update({'cancel_id': sell_order['id']})
+                    self.client.private.create_order(**order_params)
                 if self.get_stop_signal(entry_price, price):
                     if sell_order:
                         self.client.private.cancel_order(
