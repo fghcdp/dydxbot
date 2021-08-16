@@ -23,11 +23,11 @@ class Bot:
 
     def __init__(
         self,
-        histories_fname='histories',
         num_samples=20,
-        num_std=2,
-        positive_multiplier=1.003,
-        negative_multiplier=.999,
+        num_std=3,
+        take_profit_multiplier=1.001,
+        stop_loss_multiplier=.98,
+        records_fname='records',
         ):
         self.client = Client(
             host=HOST,
@@ -37,11 +37,12 @@ class Bot:
         self.client.stark_private_key = STARK_PRIVATE_KEY
         self.coinbase_api = 'https://api.pro.coinbase.com'
         self.market = None
-        self.histories_fname = histories_fname
         self.num_samples = num_samples
         self.num_std = num_std
-        self.positive_multiplier = positive_multiplier
-        self.negative_multiplier = negative_multiplier
+        self.take_profit_multiplier = take_profit_multiplier
+        self.stop_loss_multiplier = stop_loss_multiplier
+        self.records_fname = records_fname
+        self.candles = {}
         self.price_history = []
         self.mean_price = None
         self.mean_std = None
@@ -69,17 +70,10 @@ class Bot:
             json.dump(histories, f)
 
     def get_price_history(self):
-        # endpoint = f'/products/{self.market}/candles'
-        # r = requests.get(self.coinbase_api + endpoint)
-        # data = r.json()[:self.num_samples][::-1]
-        # self.price_history = [float(x[4]) for x in data]
-
-        history = self.load_market_history()
-        history.append(float(self.market_info['indexPrice']))
-        self.price_history = history[-120:]
-        self.save_market_history(self.price_history)
-        if len(self.price_history) == 1:
-            self.price_history += self.price_history
+        endpoint = f'/products/{self.market}/candles'
+        r = requests.get(self.coinbase_api + endpoint)
+        data = r.json()[:self.num_samples][::-1]
+        self.price_history = [float(x[4]) for x in data]
 
     def calculate_price_stats(self):
         self.mean_price = statistics.mean(self.price_history)
@@ -88,14 +82,11 @@ class Bot:
     def get_entry_signal(self, price):
         return price < self.mean_price - self.num_std * self.mean_std
 
-    def get_positive_exit_signal(self, entry_price, price):
-        return entry_price * self.positive_multiplier < price
-
-    def get_negative_exit_signal(self, entry_price, price):
-        return price < entry_price * self.negative_multiplier
+    def get_take_profit_signal(self, entry_price, price):
+        return entry_price * self.take_profit_multiplier < price
 
     def get_stop_signal(self, entry_price, price):
-        return price < entry_price * .98
+        return price < entry_price * self.stop_loss_multiplier
 
     def get_market_info(self):
         r = self.client.public.get_markets(self.market)
@@ -136,6 +127,11 @@ class Bot:
             'long': [x for x in positions if x['side'] == 'LONG'],
             'short': [x for x in positions if x['side'] == 'SHORT'],
         }
+
+    def calculate_mid_market_price(self):
+        bid_price = float(self.orderbook['bids'][0]['price'])
+        ask_price = float(self.orderbook['asks'][0]['price'])
+        return bid_price + (ask_price - bid_price) * .5
 
     """
     STRATEGIES
@@ -178,8 +174,8 @@ class Bot:
                 else None
 
             if not self.positions['long']:
-                price = float(self.orderbook['bids'][0]['price'])
-                if self.get_entry_signal(price):
+                price = self.orderbook['bids'][0]['price']
+                if self.get_entry_signal(float(price)):
                     if not buy_order:
                         equity = float(self.account['equity'])
                         size = min(equity, 10000)
@@ -188,7 +184,6 @@ class Bot:
                         size = str(
                             max(size, float(self.market_info['minOrderSize']))
                         )
-                        price = str(price)
                         order_params = {
                             'position_id': self.account['positionId'],
                             'market': market,
@@ -204,7 +199,7 @@ class Bot:
 
             else:
                 entry_price = float(self.positions['long'][0]['entryPrice'])
-                price = float(self.orderbook['asks'][0]['price'])
+                price = self.orderbook['asks'][0]['price']
                 size = self.positions['long'][0]['sumOpen']
                 order_params = {
                     'position_id': self.account['positionId'],
@@ -213,7 +208,7 @@ class Bot:
                     'order_type': ORDER_TYPE_LIMIT,
                     'post_only': True,
                     'size': size,
-                    'price': str(price),
+                    'price': price,
                     'limit_fee': '0.0005',
                     'expiration_epoch_seconds': time.time() + 3600,
                 }
@@ -228,14 +223,14 @@ class Bot:
                     if buy_order:
                         order_params.update({'cancel_id': buy_order['id']})
                     self.client.private.create_order(**order_params)
-                elif self.get_positive_exit_signal(entry_price, price):
+                elif self.get_take_profit_signal(entry_price, float(price)):
                     if not sell_order:
                         self.client.private.create_order(**order_params)
-                elif self.get_negative_exit_signal(entry_price, price):
-                    if sell_order:
-                        order_params.update({'cancel_id': sell_order['id']})
-                    self.client.private.create_order(**order_params)
-                if self.get_stop_signal(entry_price, price):
+                if self.get_stop_signal(entry_price, float(price)):
+                    if buy_order:
+                        self.client.private.cancel_order(
+                            order_id=buy_order['id']
+                        )
                     if sell_order:
                         self.client.private.cancel_order(
                             order_id=sell_order['id']
