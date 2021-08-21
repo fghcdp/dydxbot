@@ -1,4 +1,5 @@
 from system import System
+from indicators import BollingerBands, RelativeStrengthIndicator
 
 
 class BollingerStrategy(System):
@@ -32,19 +33,43 @@ class BollingerStrategy(System):
             return self.price_ticker < self.entry_price * self.stop_loss_multiplier
 
 
-class VolumeRSIBollingerStrategy(System):
+class RSIBollingerStrategy(System):
     """
-    - [] Add candle size to params (resolution)
-    - [] Add volume history method in system
-    - [] Add volume stats method in system
+    - [x] Add candle size to params (resolution)
     - [] Add entry signal
     - [] Add exit signal
     - [] Stoploss not implemented exception
     - [] Implement shorting func
+    - [] Implement periodic update of params
     """
 
-    def __init__(self, num=10, **kwargs):
+    def __init__(
+        self,
+        rsi_source='close',
+        rsi_length=14,
+        rsi_threshold=.3,
+        bollinger_source='close',
+        bollinger_length=20,
+        bollinger_num_stdev=2,
+        max_positions=5,
+        max_positions_per_side=3,
+        max_risk=.02,
+        stoploss_delta=.2,
+        **kwargs
+        ):
         System.__init__(self, **kwargs)
+        self.bollinger_length = bollinger_length
+        self.rsi = RelativeStrengthIndicator(
+            candles=self.candles,
+            source=rsi_source, 
+            length=rsi_length, 
+        ).indicator
+        self.bollinger_bands = BollingerBands(
+            candles=self.candles,
+            source=bollinger_source,
+            length=bollinger_length,
+            num_stdev=bollinger_num_stdev,
+        ).indicator
 
     def get_entry_signal(self, price):
         return price < self.mean_price - self.num_std * self.mean_std
@@ -58,5 +83,5 @@ class VolumeRSIBollingerStrategy(System):
 
 STRATEGIES = {
     'bollinger': BollingerStrategy,
-    'volume_rsi': VolumeRSIStrategy,
+    'volume_rsi': RSIBollingerStrategy,
 }

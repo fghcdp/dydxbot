@@ -1,5 +1,6 @@
 import time
 import json
+import datetime
 import decimal
 import statistics
 from dydx3 import Client
@@ -35,8 +36,7 @@ class System:
         self.resolution = resolution
         self.limit = limit
         self.records_fname = records_fname
-        self.candles = {}
-        self.price_history = []
+        self.candles = []
         self.mean_price = None
         self.mean_std = None
         self.market_info = {}
@@ -49,7 +49,7 @@ class System:
 
         self.get_account()
         self.get_market_info()
-        self.get_price_history()
+        self.get_candles()
         self.calculate_price_stats()
         self.get_orderbook()
         self.get_buy_orders()
@@ -75,18 +75,22 @@ class System:
         with open(self.histories_fname + '.json', 'w') as f:
             json.dump(histories, f)
 
-    def get_price_history(self):
+    def get_candles(self):
+        to_iso = (
+            datetime.datetime.utcnow() - datetime.timedelta(hours=1)
+        ).isoformat()
         r = self.client.public.get_candles(
             self.market,
             resolution=self.resolution,
             limit=self.limit,
+            to_iso=to_iso,
         )['candles']
-        data = r[::-1]
-        self.price_history = [float(x['close']) for x in data]
+        self.candles = r[::-1]
 
     def calculate_price_stats(self):
-        self.mean_price = statistics.mean(self.price_history)
-        self.mean_std = statistics.stdev(self.price_history)
+        candle_closes = [float(x['close']) for x in self.candles]
+        self.mean_price = statistics.mean(candle_closes)
+        self.mean_std = statistics.stdev(candle_closes)
 
     def get_market_info(self):
         r = self.client.public.get_markets(self.market)
