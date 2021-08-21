@@ -130,3 +130,6 @@ dmypy.json
 
 # config
 config.py
+
+# Celery
+celerybeat-schedule.db
