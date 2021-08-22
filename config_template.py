@@ -11,3 +11,6 @@ QUOTATION_ASSET = 'USD'
 BASE_ASSETS = [
     'ETH',
 ]
+
+BROKER = ''
+

@@ -1,8 +1,9 @@
 from celery import Celery
 from app import Bot
+from config import BROKER
 
 
-app = Celery('tasks')
+app = Celery('tasks', broker=BROKER)
 
 
 @app.on_after_configure.connect
