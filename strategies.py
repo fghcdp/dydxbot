@@ -22,26 +22,18 @@ class BollingerStrategy(System):
             self.entry_price = float(self.positions[self.side][0]['entryPrice'])
 
     def get_entry_signal(self):
-        return self.price_ticker < self.mean_price - self.num_std * self.mean_std
+        return self.ticker < self.mean_price - self.num_std * self.mean_std
 
     def get_exit_signal(self):
         if self.entry_price:
-            return self.entry_price * self.take_profit_multiplier < self.price_ticker
+            return self.entry_price * self.take_profit_multiplier < self.ticker
 
     def get_stop_signal(self):
         if self.entry_price:
-            return self.price_ticker < self.entry_price * self.stop_loss_multiplier
+            return self.ticker < self.entry_price * self.stop_loss_multiplier
 
 
 class RSIBollingerStrategy(System):
-    """
-    - [x] Add candle size to params (resolution)
-    - [] Add entry signal
-    - [] Add exit signal
-    - [] Stoploss not implemented exception
-    - [] Implement shorting func
-    - [] Implement periodic update of params
-    """
 
     def __init__(
         self,
@@ -51,14 +43,10 @@ class RSIBollingerStrategy(System):
         bollinger_source='close',
         bollinger_length=20,
         bollinger_num_stdev=2,
-        max_positions=5,
-        max_positions_per_side=3,
-        max_risk=.02,
-        stoploss_delta=.2,
         **kwargs
         ):
         System.__init__(self, **kwargs)
-        self.bollinger_length = bollinger_length
+        self.rsi_threshold = rsi_threshold
         self.rsi = RelativeStrengthIndicator(
             candles=self.candles,
             source=rsi_source, 
@@ -70,16 +58,42 @@ class RSIBollingerStrategy(System):
             length=bollinger_length,
             num_stdev=bollinger_num_stdev,
         ).indicator
+        self.close = float(self.candles[-1]['close'])
+        self.boll = self.bollinger_bands[-1]['boll']
+        self.sma = self.bollinger_bands[-1]['sma']
+        self.stdev = (self.sma - self.boll) / bollinger_num_stdev
 
-    def get_entry_signal(self, price):
-        return price < self.mean_price - self.num_std * self.mean_std
+    def get_long_entry_signal(self):
+        rsi_oversold = self.rsi_threshold * 100
+        return (
+            self.rsi[-1] < rsi_oversold
+            and self.close < self.boll
+            and self.ticker < self.boll
+        )
 
-    def get_take_profit_signal(self, entry_price, price):
-        return entry_price * self.take_profit_multiplier < price
+    def get_short_entry_signal(self):
+        rsi_overbought = (1 - self.rsi_threshold) * 100
+        return (
+            self.rsi[-1] > rsi_overbought
+            and self.close > self.sma
+            and self.ticker > self.sma
+        )
 
-    def get_stop_signal(self, entry_price, price):
-        return price < entry_price * self.stop_loss_multiplier
+    def get_long_exit_signal(self):
+        return self.ticker > self.boll + self.stdev * .1
 
+    def get_short_exit_signal(self):
+        return self.ticker < self.sma - self.stdev * .1
+
+    def get_long_stop_signal(self):
+        for position in self.positions['long']:
+            entry_price = float(position['entryPrice'])
+            return self.ticker < entry_price * (1 - self.stoploss_delta)
+
+    def get_short_stop_signal(self):
+        for position in self.positions['short']:
+            entry_price = float(position['entryPrice'])
+            return self.ticker > entry_price * (1 + self.stoploss_delta)
 
 STRATEGIES = {
     'bollinger': BollingerStrategy,

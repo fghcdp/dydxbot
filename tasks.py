@@ -5,10 +5,11 @@ from config import (
     PARAMETERS,
     STRATEGY,
     TASK_INTERVAL,
+    BROKER,
 )
 
 
-app = Celery('tasks', task_always_eager=True)
+app = Celery('tasks', broker=BROKER)
 
 
 @app.on_after_configure.connect
@@ -19,5 +20,4 @@ def setup_periodic_tasks(sender, **kwargs):
 @app.task
 def run_bot(args, **kwargs):
     for market in MARKETS:
-        kwargs['market'] = market
-        run_strategy(args, **kwargs)
+        run_strategy(args, market=market, **kwargs)

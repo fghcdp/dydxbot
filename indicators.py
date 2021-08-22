@@ -17,7 +17,8 @@ class BollingerBands:
         self.indicator = self.create_indicator()
 
     def create_indicator(self):
-        df = pandas.DataFrame(self.candles, dtype=float)
+        df = pandas.DataFrame(self.candles)
+        df[self.source] = df[self.source].apply(pandas.to_numeric)
         df['sma'] = df[self.source].rolling(self.length, min_periods=1).mean()
         df['stdev'] = df[self.source].rolling(self.length, min_periods=1).std()
         df['boll'] = df.sma - df.stdev * self.num_stdev
@@ -39,7 +40,8 @@ class RelativeStrengthIndicator:
         self.indicator = self.create_indicator()
 
     def create_indicator(self): 
-        df = pandas.DataFrame(self.candles, dtype=float)
+        df = pandas.DataFrame(self.candles)
+        df[self.source] = df[self.source].apply(pandas.to_numeric)
         delta = df[self.source].diff()
         up = delta.clip(lower=0)
         down = -1 * delta.clip(upper=0)
