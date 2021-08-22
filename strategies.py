@@ -68,7 +68,7 @@ class RSIBollingerStrategy(System):
         return (
             self.rsi[-1] < rsi_oversold
             and self.close < self.boll
-            and self.ticker < self.boll
+            and self.ticker <= self.close
         )
 
     def get_short_entry_signal(self):
@@ -76,7 +76,7 @@ class RSIBollingerStrategy(System):
         return (
             self.rsi[-1] > rsi_overbought
             and self.close > self.sma
-            and self.ticker > self.sma
+            and self.ticker >= self.close
         )
 
     def get_long_exit_signal(self):
